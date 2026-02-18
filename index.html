@@ -98,13 +98,27 @@
                 const scope37_Total = indEmissions / 1000;
 
                 // SCOPE 3.6: BUSINESS TRAVEL
-                const salesEmissions = personas.sales * ((5000 * FACTORS.travel.train) + (2000 * FACTORS.commute.car) + (5 * FACTORS.travel.flight_short));
+                // 1. Dynamische Ratio: Wie viele der westlichen FTEs sitzen in der EU vs. USA?
+                const westernFTE = euFTE + usFTE || 1; // "|| 1" verhindert einen Error bei 0
+                const euRatio = euFTE / westernFTE;
+                const usRatio = usFTE / westernFTE;
+
+                // 2. Regionale Baseline-Multiplikatoren (inklusive Hotelnächte)
+                // EU: Zug-fokussiert, 5 Kurzstreckenflüge, Mietwagen, 20 Hotelnächte
+                const euSalesMultiplier = (5000 * FACTORS.travel.train) + (2000 * FACTORS.commute.car) + (5 * FACTORS.travel.flight_short) + (20 * FACTORS.travel.hotel_night);
+
+                // US: Flug-fokussiert (30 Kurzstreckenflüge), Mietwagen, 40 Hotelnächte (0 Zug)
+                const usSalesMultiplier = (30 * FACTORS.travel.flight_short) + (2000 * FACTORS.commute.car) + (40 * FACTORS.travel.hotel_night);
+
+                // 3. Gewichteter Sales-Durchschnitt auf das einzelne Input-Feld angewendet
+                const salesEmissions = personas.sales * ((euRatio * euSalesMultiplier) + (usRatio * usSalesMultiplier));
+
                 const deliveryEmissions = personas.delivery * (2000 * FACTORS.travel.train);
                 const globalEmissions = globalTrips * (FACTORS.travel.flight_long + (4 * FACTORS.travel.hotel_night));
                 
                 // Dynamische Event-Kalkulation basierend auf FTEs der Region
-                // EU Event: 400km Zug + 2 Nächte Hotel pro Kopf
-                const euEventEmissions = euEvent ? euFTE * ((400 * FACTORS.travel.train) + (2 * FACTORS.travel.hotel_night)) : 0;
+                // EU Event: 1 Kurzstreckenflug + 2 Nächte Hotel pro Kopf
+                const euEventEmissions = euEvent ? euFTE * (FACTORS.travel.flight_short + (2 * FACTORS.travel.hotel_night)) : 0;
                 // US Event: 1 Kurzstreckenflug + 2 Nächte Hotel pro Kopf (USA ist fluglastiger)
                 const usEventEmissions = usEvent ? usFTE * (FACTORS.travel.flight_short + (2 * FACTORS.travel.hotel_night)) : 0;
                 
