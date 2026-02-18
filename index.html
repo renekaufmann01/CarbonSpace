@@ -3,11 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbon Space</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Zifo ESG Proxy Engine</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
-<body>
-    <div id="root"></div>
-    <script src="index.js"></script>
+<body class="bg-slate-50 text-slate-900 font-sans p-6">
+    <div id="root">
+        <p class="text-center text-slate-500 mt-20 font-semibold animate-pulse">Initializing ESG Proxy Engine...</p>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useRef, useEffect } = React;
+
+        const FACTORS = {
+            grid: { india: 0.7, eu: 0.25 },
+            commute: { car: 0.19, motorbike: 0.11, rickshaw: 0.09, metro: 0.03, bus_shuttle: 0.05 },
+            travel: { train: 0.04, flight_short: 150, flight_long: 1000, hotel_night: 30 },
+            hardware: { yearly_laptop_cloud: 150 }
+        };
+        const COLORS = ['#0f172a', '#3b82f6', '#10b981'];
+
+        function SimpleBarChart({ data }) {
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            useEffect(() => {
+                if (chartRef.current && data) {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+                    
+                    const ctx = chartRef.current.getContext('2d');
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.name),
+                            datasets: [{
+                                label: 'Emissions (tCO₂e)',
+                                data: data.map(d => d.value),
+                                backgroundColor: COLORS,
+                                borderRadius: 4,
+                                borderSkipped: false
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                x: { beginAtZero: true }
+                            }
+                        }
+                    });
+                }
+
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+                };
+            }, [data]);
+
+            return <canvas ref={chartRef}></canvas>;
+        }
+
+        function App() {
+            const [indiaFTE] = useState(2000);
+            const [euUSFTE] = useState(180);
+            const [indiaSplit, setIndiaSplit] = useState({ car: 5, motorbike: 35, rickshaw: 20, metro: 10, shuttle: 30 });
+            const [euRemote, setEuRemote] = useState({ homeDays: 4, officeDays: 1 });
+            const [personas, setPersonas] = useState({ sales: 20, delivery: 160 });
+            const [globalTrips, setGlobalTrips] = useState(15);
+            const [flagshipEvent, setFlagshipEvent] = useState(true);
+
+            const calculations = useMemo(() => {
+                const indiaDays = 240, indiaKmPerDay = 30;
+                const indiaTotalKm = indiaFTE * indiaDays * indiaKmPerDay;
+                const indEmissions = ['car', 'motorbike', 'rickshaw', 'metro'].reduce((acc, mode) => 
+                    acc + (indiaSplit[mode] / 100) * indiaTotalKm * FACTORS.commute[mode], 
+                0) + (indiaSplit.shuttle / 100) * indiaTotalKm * FACTORS.commute.bus_shuttle;
+                const scope37_India = indEmissions / 1000;
+
+                const weeks = 48;
+                const euHome = euUSFTE * weeks * euRemote.homeDays * 2 * FACTORS.grid.eu;
+                const euOffice = euUSFTE * weeks * euRemote.officeDays * (3 * FACTORS.grid.eu + 10 * FACTORS.commute.car);
+                const scope37_Total = scope37_India + ((euHome + euOffice) / 1000);
+
+                const salesEmissions = personas.sales * ((5000 * FACTORS.travel.train) + (2000 * FACTORS.commute.car) + (5 * FACTORS.travel.flight_short));
+                const deliveryEmissions = personas.delivery * (2000 * FACTORS.travel.train);
+                const globalEmissions = globalTrips * (FACTORS.travel.flight_long + (4 * FACTORS.travel.hotel_night));
+                const eventEmissions = flagshipEvent ? 180 * ((400 * FACTORS.travel.train) + (2 * FACTORS.travel.hotel_night)) : 0;
+                const scope36_Total = (salesEmissions + deliveryEmissions + globalEmissions + eventEmissions) / 1000;
+
+                const scope31_Total = ((indiaFTE + euUSFTE) * FACTORS.hardware.yearly_laptop_cloud) / 1000;
+                const totalEmissions = scope37_Total + scope36_Total + scope31_Total;
+
+                return {
+                    scope31: scope31_Total, scope36: scope36_Total, scope37: scope37_Total, total: totalEmissions,
+                    chartData: [
+                        { name: 'Goods (3.1)', value: Math.round(scope31_Total) },
+                        { name: 'Travel (3.6)', value: Math.round(scope36_Total) },
+                        { name: 'Commuting (3.7)', value: Math.round(scope37_Total) }
+                    ]
+                };
+            }, [indiaSplit, euRemote, personas, globalTrips, flagshipEvent, indiaFTE, euUSFTE]);
+
+            const handleIndiaSplit = (mode, val) => setIndiaSplit(prev => ({ ...prev, [mode]: Number(val) }));
+            const splitTotal = Object.values(indiaSplit).reduce((a, b) => a + b, 0);
+
+            return (
+                <div className="max-w-6xl mx-auto pb-10">
+                    <div className="flex justify-between items-center border-b border-slate-300 pb-4 mb-8">
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Zifo ESG Proxy Engine</h1>
+                            <p className="text-sm text-slate-500">EcoVadis Corporate Carbon Footprint</p>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-4xl font-extrabold text-blue-600">{Math.round(calculations.total)} <span className="text-lg text-slate-500 font-medium">tCO₂e</span></div>
+                            <p className="text-xs font-semibold uppercase text-slate-400">Total Enterprise Footprint</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* INPUTS */}
+                        <div className="space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                <h2 className="text-lg font-bold mb-4">📍 India Commuting (2000 FTE)</h2>
+                                <div className="space-y-3">
+                                    {Object.entries(indiaSplit).map(([mode, val]) => (
+                                        <div key={mode} className="flex items-center justify-between">
+                                            <label className="text-sm font-medium capitalize w-24">{mode}</label>
+                                            <input type="range" min="0" max="100" value={val} onChange={(e) => handleIndiaSplit(mode, e.target.value)} className="w-full mx-4" />
+                                            <span className="text-sm font-bold w-12 text-right">{val}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {splitTotal !== 100 && <p className="text-red-500 text-xs mt-3 font-bold">Warning: Total is {splitTotal}%. Adjust to 100%.</p>}
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                <h2 className="text-lg font-bold mb-4">✈️ Business Travel</h2>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-medium">Sales Personas</label>
+                                        <input type="number" value={personas.sales} onChange={(e) => setPersonas({...personas, sales: Number(e.target.value)})} className="p-2 border rounded w-24 text-right" />
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-medium">Delivery Personas</label>
+                                        <input type="number" value={personas.delivery} onChange={(e) => setPersonas({...personas, delivery: Number(e.target.value)})} className="p-2 border rounded w-24 text-right" />
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-medium">Global Trips (Yearly)</label>
+                                        <input type="number" value={globalTrips} onChange={(e) => setGlobalTrips(Number(e.target.value))} className="p-2 border rounded w-24 text-right" />
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2">
+                                        <label className="text-sm font-medium">European All-Hands (180 Pax)</label>
+                                        <input type="checkbox" checked={flagshipEvent} onChange={(e) => setFlagshipEvent(e.target.checked)} className="w-5 h-5 accent-blue-600" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* OUTPUTS */}
+                        <div className="space-y-6">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                <h2 className="text-lg font-bold mb-4">📊 EcoVadis Export Summary</h2>
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b-2 text-xs uppercase text-slate-500"><th className="py-2">Category</th><th className="py-2 text-right">tCO₂e</th></tr>
+                                    </thead>
+                                    <tbody className="text-sm">
+                                        <tr className="border-b"><td className="py-3">Scope 3.1 - Purchased Goods</td><td className="py-3 font-semibold text-right">{Math.round(calculations.scope31).toLocaleString()}</td></tr>
+                                        <tr className="border-b"><td className="py-3">Scope 3.6 - Business Travel</td><td className="py-3 font-semibold text-right">{Math.round(calculations.scope36).toLocaleString()}</td></tr>
+                                        <tr><td className="py-3">Scope 3.7 - Commuting</td><td className="py-3 font-semibold text-right">{Math.round(calculations.scope37).toLocaleString()}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-64">
+                                <SimpleBarChart data={calculations.chartData} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
