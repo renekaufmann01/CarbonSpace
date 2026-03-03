@@ -86,7 +86,7 @@
             const calculations = useMemo(() => {
                 const totalFTE = indiaFTE + euFTE + usFTE;
 
-                // SCOPE 3.1: PURCHASED GOODS (Transparenter Proxy pro FTE)
+                // SCOPE 3.1: PURCHASED GOODS (Transparenter Proxy pro FTE) - least accurate is the "spend-based method," which multiplies the monetary value of a purchase by an environmentally-extended input-output (EEIO) emission factor
                 const scope31_Total = (totalFTE * FACTORS.hardware.yearly_laptop_cloud) / 1000;
 
                 // SCOPE 3.7: COMMUTING (Nur Indien Delivery Center)
